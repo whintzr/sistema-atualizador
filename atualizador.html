@@ -1,0 +1,1302 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atualizador de Planilha via PDF</title>
+<style>
+  :root {
+    --ink: #0F1B1E;
+    --panel: #16262A;
+    --panel-2: #1D3034;
+    --line: #2B4247;
+    --paper: #E8E3D8;
+    --paper-dim: #9FB0AF;
+    --gold: #C9A44C;
+    --gold-dim: #8A7539;
+    --green: #6FA287;
+    --red: #C4634C;
+    --font-display: Georgia, serif;
+    --font-body: 'Segoe UI', system-ui, sans-serif;
+    --font-mono: Consolas, 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--ink); }
+  #app-root {
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--font-body);
+    padding: 28px 24px 40px;
+    max-width: 1100px;
+    margin: 0 auto;
+    min-height: 100vh;
+  }
+  #app-root h1 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 26px;
+    margin: 0 0 4px;
+  }
+  #app-root .subtitle { color: var(--paper-dim); font-size: 13.5px; margin: 0 0 10px; }
+  .autosave-note {
+    font-family: var(--font-mono); font-size: 11px; color: var(--paper-dim);
+    display: flex; align-items: center; gap: 7px; margin: 0 0 22px;
+  }
+  .autosave-note .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+    box-shadow: 0 0 0 3px rgba(111,162,135,0.15); flex-shrink: 0;
+  }
+  #banner-area:empty { display: none; }
+  .banner {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    background: var(--panel-2); border: 1px solid var(--gold-dim); border-radius: 10px;
+    padding: 12px 16px; margin-bottom: 18px; font-size: 13px; color: var(--paper);
+  }
+  .banner .banner-actions { display: flex; gap: 14px; flex-shrink: 0; white-space: nowrap; }
+  .banner button.link-btn, button.link-btn {
+    background: none; border: none; color: var(--gold);
+    font-family: var(--font-mono); font-size: 11.5px;
+    text-decoration: underline; cursor: pointer; padding: 2px 0;
+  }
+  .banner button.link-btn:hover, button.link-btn:hover { color: #d9b45c; }
+
+  .stepper { display: flex; margin-bottom: 28px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .step {
+    flex: 1; padding: 10px 14px; font-size: 12px; font-family: var(--font-mono);
+    color: var(--paper-dim); background: var(--panel); border-right: 1px solid var(--line);
+    transition: all .25s ease;
+  }
+  .step:last-child { border-right: none; }
+  .step.active { background: var(--panel-2); color: var(--gold); }
+  .step.done { color: var(--green); }
+  .step b { display: block; font-family: var(--font-body); font-size: 13.5px; color: inherit; margin-top: 2px; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 18px; }
+  .panel h2 { font-family: var(--font-display); font-size: 16px; font-weight: 600; margin: 0 0 14px; color: var(--paper); }
+  .panel h2 .h2-hint { font-family: var(--font-body); font-weight: 400; font-size: 12px; color: var(--paper-dim); margin-left: 8px; }
+
+  .user-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .user-row label { font-family: var(--font-mono); font-size: 11px; color: var(--paper-dim); text-transform: uppercase; letter-spacing: .4px; }
+  .user-row input {
+    background: var(--ink); border: 1px solid var(--line); color: var(--paper);
+    font-family: var(--font-body); font-size: 13.5px; padding: 8px 12px; border-radius: 7px; min-width: 220px;
+  }
+
+  .dropzones { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 620px) { .dropzones { grid-template-columns: 1fr; } }
+  .dropzone {
+    border: 1.5px dashed var(--line); border-radius: 10px; padding: 22px 16px;
+    text-align: center; cursor: pointer; background: var(--ink);
+    transition: border-color .2s ease;
+  }
+  .dropzone:hover { border-color: var(--gold-dim); }
+  .dropzone.filled { border-color: var(--green); border-style: solid; }
+  .dropzone .icon { font-size: 22px; margin-bottom: 8px; opacity: 0.85; }
+  .dropzone .label { font-size: 13px; color: var(--paper-dim); }
+  .dropzone .filename { font-family: var(--font-mono); font-size: 12.5px; color: var(--paper); margin-top: 6px; word-break: break-all; }
+  input[type=file] { display: none; }
+
+  select {
+    background: var(--ink); color: var(--paper); border: 1px solid var(--line);
+    border-radius: 7px; padding: 8px 10px; font-family: var(--font-mono); font-size: 12.5px; margin-top: 10px;
+  }
+
+  .btn {
+    font-family: var(--font-body); font-weight: 600; font-size: 13.5px;
+    padding: 11px 20px; border-radius: 8px; border: none; cursor: pointer;
+    transition: transform .15s ease, opacity .15s ease;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: var(--gold); color: #211A08; }
+  .btn-primary:hover:not(:disabled) { background: #d9b45c; }
+  .btn-ghost { background: transparent; color: var(--paper-dim); border: 1px solid var(--line); }
+  .btn-ghost:hover:not(:disabled) { color: var(--paper); border-color: var(--paper-dim); }
+
+  .status-line {
+    font-family: var(--font-mono); font-size: 12.5px; color: var(--gold);
+    margin-top: 14px; display: flex; align-items: center; gap: 8px;
+  }
+  .spinner {
+    width: 12px; height: 12px; border: 2px solid var(--gold-dim); border-top-color: var(--gold);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-box {
+    background: rgba(196,99,76,0.1); border: 1px solid var(--red); color: #E8B7A8;
+    padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-top: 14px;
+  }
+  .ok-box {
+    background: rgba(111,162,135,0.1); border: 1px solid var(--green); color: #BFD9CB;
+    padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-top: 14px;
+  }
+
+  table.diff { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.diff th {
+    text-align: left; font-family: var(--font-mono); font-size: 10.5px;
+    letter-spacing: 0.5px; text-transform: uppercase; color: var(--paper-dim);
+    padding: 8px 10px; border-bottom: 1px solid var(--line);
+  }
+  table.diff td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.diff tr.rejected { opacity: 0.35; }
+  table.diff tr:last-child td { border-bottom: none; }
+  .cell-ref { font-family: var(--font-mono); color: var(--gold); font-size: 12.5px; white-space: nowrap; }
+  .old-val { color: var(--paper-dim); text-decoration: line-through; font-family: var(--font-mono); font-size: 12.5px; }
+  .new-val { font-family: var(--font-mono); font-size: 12.5px; color: var(--paper); }
+  .new-val-input {
+    background: var(--ink); border: 1px solid var(--line); color: var(--paper);
+    font-family: var(--font-mono); font-size: 12.5px; padding: 5px 7px; border-radius: 5px; width: 100%;
+    min-width: 90px;
+  }
+  .source-txt { color: var(--paper-dim); font-size: 12px; font-style: italic; }
+  .stamp {
+    display: inline-block; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 1px;
+    border: 1.5px solid var(--green); color: var(--green); padding: 2px 6px; border-radius: 4px;
+    transform: rotate(-3deg); cursor: pointer; user-select: none;
+  }
+  .stamp.off { border-color: var(--red); color: var(--red); }
+
+  .empty-hint { color: var(--paper-dim); font-size: 13px; text-align: center; padding: 20px 0; }
+  .empty-hint.small { padding: 14px 0; font-size: 12.5px; }
+  .actions-row { display: flex; gap: 10px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+  .count-pill { font-family: var(--font-mono); font-size: 12px; color: var(--paper-dim); }
+
+  .summary-box { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; font-size: 13px; flex-wrap: wrap; }
+  .summary-box .stamp { cursor: default; }
+
+  .filter-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 16px; }
+  .filter-row label {
+    font-family: var(--font-mono); font-size: 10px; color: var(--paper-dim);
+    text-transform: uppercase; letter-spacing: .4px; display: flex; flex-direction: column; gap: 5px;
+  }
+  .filter-row input[type=text], .filter-row input[type=date], .filter-row select {
+    background: var(--ink); border: 1px solid var(--line); color: var(--paper);
+    font-family: var(--font-mono); font-size: 12.5px; padding: 8px 10px; border-radius: 7px; margin-top: 0;
+  }
+  .filter-row .filter-text-wrap { flex: 1; min-width: 180px; }
+  .filter-row .filter-text-wrap input { width: 100%; }
+  .filter-row .filter-btns { display: flex; gap: 8px; margin-left: auto; }
+
+  .folder { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 12px; background: var(--ink); overflow: hidden; }
+  .folder-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 13px 15px; cursor: pointer; background: var(--panel-2);
+  }
+  .folder-header:hover { filter: brightness(1.08); }
+  .folder-title { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; }
+  .folder-title .ficon { font-size: 16px; }
+  .folder-meta { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .folder-body { display: none; padding: 10px 12px; }
+  .folder.open .folder-body { display: block; }
+  .folder.open .chevron { transform: rotate(90deg); }
+
+  .history-list { display: flex; flex-direction: column; gap: 10px; }
+  .history-entry { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: var(--ink); }
+  .history-entry-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px; cursor: pointer; gap: 12px;
+  }
+  .history-entry-header:hover { background: rgba(255,255,255,0.02); }
+  .history-entry-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .history-entry-date { font-family: var(--font-mono); font-size: 12px; color: var(--gold); }
+  .history-entry-files { font-size: 12.5px; color: var(--paper-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .history-entry-meta { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .badge-count {
+    font-family: var(--font-mono); font-size: 11px; background: var(--panel-2); color: var(--paper);
+    border: 1px solid var(--line); padding: 3px 9px; border-radius: 20px; white-space: nowrap;
+  }
+  .badge-user {
+    font-family: var(--font-mono); font-size: 11px; color: var(--green);
+    border: 1px solid var(--line); padding: 3px 9px; border-radius: 20px; white-space: nowrap;
+  }
+  .chevron { transition: transform .2s ease; color: var(--paper-dim); font-size: 11px; display: inline-block; }
+  .history-entry.open .chevron { transform: rotate(90deg); }
+  .history-entry-body { display: none; border-top: 1px solid var(--line); padding: 4px 14px 6px; }
+  .history-entry.open .history-entry-body { display: block; }
+  .table-scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<div id="app-root">
+  <h1>Atualizador de Planilha via PDF</h1>
+  <p class="subtitle">Importe o PDF e a planilha — o sistema lê o documento, encontra os valores correspondentes na ordem do PDF e propõe as atualizações para sua revisão. Só os valores aprovados são gravados; formatação, cores e fontes ficam intactas.</p>
+  <div class="autosave-note"><span class="dot"></span><span>Salvamento automático ativado — se a página recarregar ou travar, os arquivos e mudanças pendentes são recuperados.</span></div>
+
+  <div id="banner-area"></div>
+
+  <div class="stepper">
+    <div class="step" id="step-1"><span>01</span><b>Arquivos</b></div>
+    <div class="step" id="step-2"><span>02</span><b>Análise</b></div>
+    <div class="step" id="step-3"><span>03</span><b>Revisão</b></div>
+    <div class="step" id="step-4"><span>04</span><b>Gravação</b></div>
+  </div>
+
+  <div class="panel">
+    <h2>1. Arquivos</h2>
+    <div class="user-row">
+      <label for="user-name">Quem está atualizando</label>
+      <input type="text" id="user-name" placeholder="Seu nome (fica registrado no histórico)">
+    </div>
+    <div class="dropzones">
+      <div class="dropzone" id="dz-pdf">
+        <div class="icon">&#128196;</div>
+        <div class="label">Clique para escolher o PDF</div>
+        <div class="filename" id="fn-pdf"></div>
+        <input type="file" id="input-pdf" accept="application/pdf">
+      </div>
+      <div class="dropzone" id="dz-xlsx">
+        <div class="icon">&#128202;</div>
+        <div class="label">Clique para escolher a planilha (.xlsx)</div>
+        <div class="filename" id="fn-xlsx"></div>
+        <input type="file" id="input-xlsx" accept=".xlsx">
+        <select id="sheet-select" style="display:none"></select>
+      </div>
+    </div>
+    <div class="actions-row">
+      <button class="btn btn-primary" id="btn-analyze" disabled>Analisar PDF e propor mudanças</button>
+      <button class="btn btn-ghost" id="btn-clear-session">Limpar sessão salva</button>
+    </div>
+    <div id="status-area"></div>
+  </div>
+
+  <div class="panel" id="panel-diff" style="display:none">
+    <h2>2. Mudanças propostas <span class="h2-hint">na ordem em que aparecem no PDF</span></h2>
+    <div class="table-scroll"><div id="diff-area"></div></div>
+    <div class="actions-row" id="diff-actions" style="display:none">
+      <span class="count-pill" id="count-pill"></span>
+      <button class="btn btn-primary" id="btn-apply">Aplicar selecionadas e gravar na planilha</button>
+      <button class="btn btn-ghost" id="btn-uncheck-all">Desmarcar todas</button>
+      <button class="btn btn-ghost" id="btn-check-all">Marcar todas</button>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-summary" style="display:none">
+    <h2>3. O que foi alterado <span class="h2-hint">antes e depois</span></h2>
+    <div class="table-scroll"><div id="summary-area"></div></div>
+  </div>
+
+  <div class="panel" id="panel-history">
+    <h2>Histórico de atualizações <span class="h2-hint">uma pasta para cada planilha</span></h2>
+    <div class="filter-row">
+      <div class="filter-text-wrap">
+        <label>Buscar
+          <input type="text" id="hist-filter-text" placeholder="célula, rótulo, valor, PDF, pessoa...">
+        </label>
+      </div>
+      <label>Pasta
+        <select id="hist-filter-folder"><option value="">Todas</option></select>
+      </label>
+      <label>De
+        <input type="date" id="hist-filter-from">
+      </label>
+      <label>Até
+        <input type="date" id="hist-filter-to">
+      </label>
+      <div class="filter-btns">
+        <button class="btn btn-ghost" id="btn-clear-filters">Limpar filtros</button>
+        <button class="btn btn-ghost" id="btn-clear-history">Apagar histórico</button>
+      </div>
+    </div>
+    <div id="history-area"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+(function(){
+  'use strict';
+
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+
+  var MAIN_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  var REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+  // ---------------- Estado ----------------
+  var state = {
+    pdfData: null,       // ArrayBuffer
+    pdfName: null,
+    xlsxData: null,      // ArrayBuffer (conteúdo original da planilha)
+    xlsxName: null,      // nome do arquivo com extensão
+    xlsxHandle: null,    // FileSystemFileHandle (para gravar no mesmo arquivo)
+    sheetNames: [],
+    activeSheet: null,
+    proposals: [],       // mudanças propostas
+    userName: ''
+  };
+  var wb = null;         // workbook analisado { zip, sheets:[{name,path}], shared:[...] }
+
+  // ---------------- Utilidades ----------------
+  function $(id){ return document.getElementById(id); }
+  function esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(m){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+    });
+  }
+  function fmtDateTime(iso){
+    try {
+      var d = new Date(iso);
+      return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+    } catch(e){ return iso; }
+  }
+  function normalize(s){
+    return String(s == null ? '' : s)
+      .toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[:–—]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  // "1.234,56" -> 1234.56 ; "1234.56" -> 1234.56 ; "1234" -> 1234
+  function parseNumberBR(s){
+    s = String(s == null ? '' : s).trim().replace(/\s/g, '');
+    if (!s) return null;
+    var neg = /^\(.*\)$/.test(s) || /^-/.test(s);
+    s = s.replace(/[()R$%]/g, '').replace(/^-/, '');
+    if (!/^[\d.,]+$/.test(s)) return null;
+    if (s.indexOf(',') !== -1) {
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else {
+      var dots = s.split('.');
+      // "1.234" com 3 dígitos após o ponto = separador de milhar
+      if (dots.length > 1 && dots[dots.length - 1].length === 3 && dots[0].length <= 3) {
+        s = s.replace(/\./g, '');
+      }
+    }
+    var n = parseFloat(s);
+    if (isNaN(n)) return null;
+    return neg ? -n : n;
+  }
+  function valuesEqual(a, b){
+    var na = parseNumberBR(a), nb = parseNumberBR(b);
+    if (na !== null && nb !== null) return Math.abs(na - nb) < 1e-9;
+    return normalize(a) === normalize(b);
+  }
+  function colToIndex(col){
+    var n = 0;
+    for (var i = 0; i < col.length; i++) n = n * 26 + (col.charCodeAt(i) - 64);
+    return n;
+  }
+  function splitAddr(addr){
+    var m = /^([A-Z]+)(\d+)$/.exec(addr);
+    return m ? { col: m[1], colIdx: colToIndex(m[1]), row: parseInt(m[2], 10) } : null;
+  }
+
+  // ---------------- IndexedDB (autosave + histórico) ----------------
+  var DB_NAME = 'atualizadorPlanilhaDB';
+  var dbPromise = null;
+  function openDB(){
+    if (dbPromise) return dbPromise;
+    dbPromise = new Promise(function(resolve, reject){
+      var req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = function(){
+        var db = req.result;
+        if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
+        if (!db.objectStoreNames.contains('history')) db.createObjectStore('history', { keyPath: 'id' });
+      };
+      req.onsuccess = function(){ resolve(req.result); };
+      req.onerror = function(){ reject(req.error); };
+    });
+    return dbPromise;
+  }
+  function kvSet(key, val){
+    return openDB().then(function(db){
+      return new Promise(function(res, rej){
+        var tx = db.transaction('kv', 'readwrite');
+        tx.objectStore('kv').put(val, key);
+        tx.oncomplete = res; tx.onerror = function(){ rej(tx.error); };
+      });
+    });
+  }
+  function kvGet(key){
+    return openDB().then(function(db){
+      return new Promise(function(res, rej){
+        var tx = db.transaction('kv', 'readonly');
+        var rq = tx.objectStore('kv').get(key);
+        rq.onsuccess = function(){ res(rq.result); };
+        rq.onerror = function(){ rej(rq.error); };
+      });
+    });
+  }
+  function kvDel(key){
+    return openDB().then(function(db){
+      return new Promise(function(res, rej){
+        var tx = db.transaction('kv', 'readwrite');
+        tx.objectStore('kv').delete(key);
+        tx.oncomplete = res; tx.onerror = function(){ rej(tx.error); };
+      });
+    });
+  }
+  function historyAdd(entry){
+    return openDB().then(function(db){
+      return new Promise(function(res, rej){
+        var tx = db.transaction('history', 'readwrite');
+        tx.objectStore('history').put(entry);
+        tx.oncomplete = res; tx.onerror = function(){ rej(tx.error); };
+      });
+    });
+  }
+  function historyAll(){
+    return openDB().then(function(db){
+      return new Promise(function(res, rej){
+        var tx = db.transaction('history', 'readonly');
+        var rq = tx.objectStore('history').getAll();
+        rq.onsuccess = function(){ res(rq.result || []); };
+        rq.onerror = function(){ rej(rq.error); };
+      });
+    });
+  }
+  function historyClear(){
+    return openDB().then(function(db){
+      return new Promise(function(res, rej){
+        var tx = db.transaction('history', 'readwrite');
+        tx.objectStore('history').clear();
+        tx.oncomplete = res; tx.onerror = function(){ rej(tx.error); };
+      });
+    });
+  }
+
+  var saveTimer = null;
+  function scheduleSave(){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveSession, 400);
+  }
+  function saveSession(){
+    var payload = {
+      pdfData: state.pdfData, pdfName: state.pdfName,
+      xlsxData: state.xlsxData, xlsxName: state.xlsxName,
+      activeSheet: state.activeSheet,
+      proposals: state.proposals,
+      savedAt: new Date().toISOString()
+    };
+    kvSet('session', payload).catch(function(e){ console.warn('Falha no autosave:', e); });
+    if (state.xlsxHandle) {
+      kvSet('xlsxHandle', state.xlsxHandle).catch(function(){ /* navegador pode não suportar persistir handle */ });
+    }
+  }
+
+  // ---------------- Leitura do XLSX (JSZip + DOM) ----------------
+  function parseXlsx(arrayBuffer){
+    return JSZip.loadAsync(arrayBuffer).then(function(zip){
+      var wbFile = zip.file('xl/workbook.xml');
+      var relFile = zip.file('xl/_rels/workbook.xml.rels');
+      if (!wbFile || !relFile) throw new Error('Arquivo .xlsx inválido (estrutura não reconhecida).');
+      return Promise.all([wbFile.async('string'), relFile.async('string'),
+        zip.file('xl/sharedStrings.xml') ? zip.file('xl/sharedStrings.xml').async('string') : Promise.resolve(null)
+      ]).then(function(parts){
+        var parser = new DOMParser();
+        var wbDoc = parser.parseFromString(parts[0], 'application/xml');
+        var relDoc = parser.parseFromString(parts[1], 'application/xml');
+
+        var relMap = {};
+        var rels = relDoc.getElementsByTagName('Relationship');
+        for (var i = 0; i < rels.length; i++){
+          var t = rels[i].getAttribute('Target');
+          if (t.charAt(0) === '/') t = t.slice(1); else t = 'xl/' + t;
+          relMap[rels[i].getAttribute('Id')] = t.replace('xl/xl/', 'xl/');
+        }
+
+        var sheets = [];
+        var sheetEls = wbDoc.getElementsByTagName('sheet');
+        for (var j = 0; j < sheetEls.length; j++){
+          var rid = sheetEls[j].getAttributeNS(REL_NS, 'id') || sheetEls[j].getAttribute('r:id');
+          sheets.push({ name: sheetEls[j].getAttribute('name'), path: relMap[rid] });
+        }
+
+        var shared = [];
+        if (parts[2]){
+          var ssDoc = parser.parseFromString(parts[2], 'application/xml');
+          var sis = ssDoc.getElementsByTagName('si');
+          for (var k = 0; k < sis.length; k++){
+            var txt = '';
+            var ts = sis[k].getElementsByTagName('t');
+            for (var m = 0; m < ts.length; m++) txt += ts[m].textContent;
+            shared.push(txt);
+          }
+        }
+        return { zip: zip, sheets: sheets, shared: shared };
+      });
+    });
+  }
+
+  // Lê as células de uma aba: retorna { addr: {value, hasFormula} }
+  function readSheetCells(workbook, sheetName){
+    var sheet = workbook.sheets.filter(function(s){ return s.name === sheetName; })[0];
+    if (!sheet || !workbook.zip.file(sheet.path)) return Promise.resolve({ cells: {}, sheet: sheet });
+    return workbook.zip.file(sheet.path).async('string').then(function(xml){
+      var doc = new DOMParser().parseFromString(xml, 'application/xml');
+      var cells = {};
+      var cs = doc.getElementsByTagName('c');
+      for (var i = 0; i < cs.length; i++){
+        var c = cs[i];
+        var addr = c.getAttribute('r');
+        if (!addr) continue;
+        var t = c.getAttribute('t') || 'n';
+        var vEl = c.getElementsByTagName('v')[0];
+        var val = '';
+        if (t === 's'){
+          val = vEl ? (workbook.shared[parseInt(vEl.textContent, 10)] || '') : '';
+        } else if (t === 'inlineStr'){
+          var isEl = c.getElementsByTagName('is')[0];
+          val = isEl ? isEl.textContent : '';
+        } else if (t === 'b'){
+          val = vEl && vEl.textContent === '1' ? 'VERDADEIRO' : 'FALSO';
+        } else {
+          val = vEl ? vEl.textContent : '';
+        }
+        cells[addr] = {
+          value: val,
+          hasFormula: c.getElementsByTagName('f').length > 0
+        };
+      }
+      return { cells: cells, sheet: sheet };
+    });
+  }
+
+  // Aplica mudanças no XML da aba, tocando SOMENTE nas células indicadas.
+  // changes: [{cell, newValue}]
+  function applyChangesToXlsx(workbook, sheetName, changes){
+    var sheet = workbook.sheets.filter(function(s){ return s.name === sheetName; })[0];
+    return workbook.zip.file(sheet.path).async('string').then(function(xml){
+      var doc = new DOMParser().parseFromString(xml, 'application/xml');
+      var removedFormula = false;
+
+      var byAddr = {};
+      var cs = doc.getElementsByTagName('c');
+      for (var i = 0; i < cs.length; i++) byAddr[cs[i].getAttribute('r')] = cs[i];
+
+      changes.forEach(function(ch){
+        var cEl = byAddr[ch.cell];
+        if (!cEl){
+          cEl = createCellInRow(doc, ch.cell);
+          if (!cEl) return;
+          byAddr[ch.cell] = cEl;
+        }
+        // remove fórmula e conteúdo antigo do valor
+        var toRemove = [];
+        for (var n = 0; n < cEl.childNodes.length; n++){
+          var nd = cEl.childNodes[n];
+          if (nd.nodeType === 1 && (nd.localName === 'f' || nd.localName === 'v' || nd.localName === 'is')){
+            if (nd.localName === 'f') removedFormula = true;
+            toRemove.push(nd);
+          }
+        }
+        toRemove.forEach(function(nd){ cEl.removeChild(nd); });
+
+        var num = parseNumberBR(ch.newValue);
+        if (num !== null){
+          cEl.removeAttribute('t');
+          var v = doc.createElementNS(MAIN_NS, 'v');
+          v.textContent = String(num);
+          cEl.appendChild(v);
+        } else {
+          cEl.setAttribute('t', 'inlineStr');
+          var is = doc.createElementNS(MAIN_NS, 'is');
+          var tEl = doc.createElementNS(MAIN_NS, 't');
+          tEl.setAttribute('xml:space', 'preserve');
+          tEl.textContent = String(ch.newValue);
+          is.appendChild(tEl);
+          cEl.appendChild(is);
+        }
+      });
+
+      var out = new XMLSerializer().serializeToString(doc);
+      if (out.indexOf('<?xml') !== 0){
+        out = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' + out;
+      }
+      workbook.zip.file(sheet.path, out);
+      // Se removemos alguma fórmula, o calcChain pode ficar inconsistente — o Excel o reconstrói sozinho.
+      if (removedFormula && workbook.zip.file('xl/calcChain.xml')){
+        workbook.zip.remove('xl/calcChain.xml');
+      }
+      return workbook.zip.generateAsync({
+        type: 'arraybuffer',
+        compression: 'DEFLATE',
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+    });
+  }
+
+  // Cria uma célula <c> vazia na linha certa, na posição certa (para células que nunca tiveram valor)
+  function createCellInRow(doc, addr){
+    var a = splitAddr(addr);
+    if (!a) return null;
+    var rows = doc.getElementsByTagName('row');
+    var rowEl = null;
+    for (var i = 0; i < rows.length; i++){
+      if (parseInt(rows[i].getAttribute('r'), 10) === a.row){ rowEl = rows[i]; break; }
+    }
+    if (!rowEl) return null; // linha não existe no XML — fora do escopo (não criamos linhas novas)
+    var cEl = doc.createElementNS(MAIN_NS, 'c');
+    cEl.setAttribute('r', addr);
+    var cellsInRow = rowEl.getElementsByTagName('c');
+    var before = null;
+    for (var j = 0; j < cellsInRow.length; j++){
+      var other = splitAddr(cellsInRow[j].getAttribute('r') || '');
+      if (other && other.colIdx > a.colIdx){ before = cellsInRow[j]; break; }
+    }
+    rowEl.insertBefore(cEl, before);
+    return cEl;
+  }
+
+  // ---------------- Leitura do PDF (pdf.js) ----------------
+  // Retorna linhas de texto na ordem do documento: [{page, text}]
+  function extractPdfLines(arrayBuffer){
+    var data = new Uint8Array(arrayBuffer.slice(0));
+    return pdfjsLib.getDocument({ data: data }).promise.then(function(pdf){
+      var pagePromises = [];
+      for (var p = 1; p <= pdf.numPages; p++){
+        (function(pageNum){
+          pagePromises.push(pdf.getPage(pageNum).then(function(page){
+            return page.getTextContent().then(function(tc){
+              var items = tc.items.map(function(it){
+                return { str: it.str, x: it.transform[4], y: it.transform[5] };
+              }).filter(function(it){ return it.str && it.str.trim() !== ''; });
+              // agrupa por linha (y aproximado)
+              items.sort(function(a, b){ return b.y - a.y || a.x - b.x; });
+              var lines = [];
+              var current = null;
+              items.forEach(function(it){
+                if (current && Math.abs(current.y - it.y) < 3){
+                  current.parts.push(it);
+                } else {
+                  if (current) lines.push(current);
+                  current = { y: it.y, parts: [it] };
+                }
+              });
+              if (current) lines.push(current);
+              return lines.map(function(ln){
+                ln.parts.sort(function(a, b){ return a.x - b.x; });
+                return { page: pageNum, text: ln.parts.map(function(pp){ return pp.str; }).join(' ').replace(/\s+/g, ' ').trim() };
+              });
+            });
+          }));
+        })(p);
+      }
+      return Promise.all(pagePromises).then(function(pages){
+        var all = [];
+        pages.forEach(function(pl){ pl.forEach(function(l){ all.push(l); }); });
+        return all;
+      });
+    });
+  }
+
+  // ---------------- Motor de correspondência ----------------
+  // Casa rótulos da planilha com linhas do PDF e propõe mudanças na ordem do PDF.
+  function buildProposals(cells, pdfLines){
+    // 1. candidatos a rótulo na planilha: células de texto
+    var labels = [];
+    Object.keys(cells).forEach(function(addr){
+      var cell = cells[addr];
+      var val = String(cell.value == null ? '' : cell.value).trim();
+      if (!val) return;
+      if (parseNumberBR(val) !== null) return; // números não são rótulos
+      var norm = normalize(val);
+      if (norm.length < 2) return;
+      var a = splitAddr(addr);
+      if (!a) return;
+      labels.push({ addr: addr, row: a.row, colIdx: a.colIdx, text: val, norm: norm });
+    });
+
+    // 2. para cada rótulo, células-alvo: à direita na mesma linha (com valor ou a 1ª vazia logo após)
+    var addrByRowCol = {};
+    Object.keys(cells).forEach(function(addr){
+      var a = splitAddr(addr);
+      if (a) addrByRowCol[a.row + '_' + a.colIdx] = addr;
+    });
+    function indexToCol(n){
+      var s = '';
+      while (n > 0){ var r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
+      return s;
+    }
+    labels.forEach(function(lb){
+      lb.targets = [];
+      for (var c = lb.colIdx + 1; c <= lb.colIdx + 30; c++){
+        var addr = indexToCol(c) + lb.row;
+        var cell = cells[addr];
+        if (cell && String(cell.value).trim() !== ''){
+          // outra célula de texto grande interrompe (provável outro rótulo)
+          if (parseNumberBR(cell.value) === null && normalize(cell.value).length > 3 && lb.targets.length > 0) break;
+          lb.targets.push({ addr: addr, current: cell.value, hasFormula: cell.hasFormula, existed: true });
+        } else if (lb.targets.length === 0 && c <= lb.colIdx + 3){
+          // primeira célula vazia logo ao lado pode receber valor
+          lb.targets.push({ addr: addr, current: '', hasFormula: false, existed: !!cell });
+        } else if (lb.targets.length > 0){
+          break;
+        }
+      }
+    });
+
+    // rótulos mais longos têm prioridade (evita "total" casar antes de "total geral")
+    var sorted = labels.slice().sort(function(a, b){ return b.norm.length - a.norm.length; });
+
+    var proposals = [];
+    var usedCells = {};
+
+    pdfLines.forEach(function(line, lineIdx){
+      var normLine = normalize(line.text);
+      if (!normLine) return;
+      sorted.forEach(function(lb){
+        if (!lb.targets || !lb.targets.length) return;
+        var pos = normLine.indexOf(lb.norm);
+        if (pos === -1) return;
+        // trecho da linha após o rótulo
+        var after = normLine.slice(pos + lb.norm.length).trim();
+        if (!after) return;
+        // extrai tokens de valor: números (padrão BR) e/ou texto
+        var numTokens = after.match(/-?[\d]{1,3}(?:\.\d{3})*(?:,\d+)?%?|-?\d+(?:[.,]\d+)?%?/g) || [];
+        numTokens = numTokens.map(function(tk){ return tk.replace(/%$/, ''); })
+          .filter(function(tk){ return parseNumberBR(tk) !== null; });
+
+        var numericTargets = lb.targets.filter(function(t){
+          return t.current === '' || parseNumberBR(t.current) !== null;
+        });
+
+        if (numTokens.length && numericTargets.length){
+          var n = Math.min(numTokens.length, numericTargets.length);
+          for (var i = 0; i < n; i++){
+            var target = numericTargets[i];
+            if (usedCells[target.addr]) continue;
+            var newVal = numTokens[i];
+            if (valuesEqual(target.current, newVal)) { usedCells[target.addr] = true; continue; }
+            usedCells[target.addr] = true;
+            proposals.push({
+              id: proposals.length,
+              cell: target.addr,
+              label: lb.text,
+              oldValue: target.current,
+              newValue: newVal,
+              hasFormula: target.hasFormula,
+              source: line.text.length > 120 ? line.text.slice(0, 120) + '…' : line.text,
+              page: line.page,
+              order: lineIdx,
+              accepted: true
+            });
+          }
+        } else if (!numTokens.length && numericTargets.length === 0 && lb.targets.length){
+          // valor textual: "Campo: Texto novo"
+          var target2 = lb.targets[0];
+          if (usedCells[target2.addr]) return;
+          // recupera o texto original (com maiúsculas/acentos) a partir da linha bruta
+          var rawIdx = normalize(line.text).indexOf(lb.norm);
+          var rawAfter = line.text.slice(rawIdx >= 0 ? rawIdx : 0);
+          var cut = rawAfter.replace(/^[^:]*:?\s*/, '').trim();
+          if (!cut || cut.length > 80) return;
+          if (valuesEqual(target2.current, cut)) { usedCells[target2.addr] = true; return; }
+          usedCells[target2.addr] = true;
+          proposals.push({
+            id: proposals.length,
+            cell: target2.addr,
+            label: lb.text,
+            oldValue: target2.current,
+            newValue: cut,
+            hasFormula: target2.hasFormula,
+            source: line.text.length > 120 ? line.text.slice(0, 120) + '…' : line.text,
+            page: line.page,
+            order: lineIdx,
+            accepted: true
+          });
+        }
+      });
+    });
+
+    proposals.sort(function(a, b){ return a.order - b.order; });
+    proposals.forEach(function(p, i){ p.id = i; });
+    return proposals;
+  }
+
+  // ---------------- UI: passos / status ----------------
+  function setStep(n){
+    for (var i = 1; i <= 4; i++){
+      var el = $('step-' + i);
+      el.classList.remove('active', 'done');
+      if (i < n) el.classList.add('done');
+      if (i === n) el.classList.add('active');
+    }
+  }
+  function setStatus(html, kind){
+    var area = $('status-area');
+    if (!html){ area.innerHTML = ''; return; }
+    if (kind === 'error') area.innerHTML = '<div class="error-box">' + html + '</div>';
+    else if (kind === 'ok') area.innerHTML = '<div class="ok-box">' + html + '</div>';
+    else area.innerHTML = '<div class="status-line"><div class="spinner"></div>' + html + '</div>';
+  }
+  function showBanner(message){
+    $('banner-area').innerHTML = '<div class="banner"><span>' + message + '</span>' +
+      '<span class="banner-actions">' +
+      '<button class="link-btn" id="btn-dismiss-banner">Dispensar</button>' +
+      '</span></div>';
+    var b = $('btn-dismiss-banner');
+    if (b) b.onclick = function(){ $('banner-area').innerHTML = ''; };
+  }
+  function checkReady(){
+    $('btn-analyze').disabled = !(state.pdfData && state.xlsxData);
+  }
+
+  // ---------------- Upload ----------------
+  var hasFS = typeof window.showOpenFilePicker === 'function';
+
+  $('dz-pdf').addEventListener('click', function(){ $('input-pdf').click(); });
+  $('input-pdf').addEventListener('change', function(e){
+    var f = e.target.files[0];
+    if (!f) return;
+    f.arrayBuffer().then(function(buf){
+      state.pdfData = buf;
+      state.pdfName = f.name;
+      $('fn-pdf').textContent = f.name;
+      $('dz-pdf').classList.add('filled');
+      checkReady();
+      scheduleSave();
+    });
+  });
+
+  $('dz-xlsx').addEventListener('click', function(ev){
+    if (ev.target && ev.target.id === 'sheet-select') return;
+    if (hasFS){
+      window.showOpenFilePicker({
+        types: [{ description: 'Planilha Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }],
+        multiple: false
+      }).then(function(handles){
+        var handle = handles[0];
+        state.xlsxHandle = handle;
+        return handle.getFile();
+      }).then(function(f){
+        return f.arrayBuffer().then(function(buf){ loadXlsx(buf, f.name); });
+      }).catch(function(err){
+        if (err && err.name === 'AbortError') return;
+        console.warn('Seletor de arquivo falhou, usando modo compatível:', err);
+        $('input-xlsx').click();
+      });
+    } else {
+      $('input-xlsx').click();
+    }
+  });
+  $('input-xlsx').addEventListener('change', function(e){
+    var f = e.target.files[0];
+    if (!f) return;
+    state.xlsxHandle = null;
+    f.arrayBuffer().then(function(buf){ loadXlsx(buf, f.name); });
+  });
+
+  function loadXlsx(buf, name){
+    parseXlsx(buf).then(function(workbook){
+      wb = workbook;
+      state.xlsxData = buf;
+      state.xlsxName = name;
+      state.sheetNames = workbook.sheets.map(function(s){ return s.name; });
+      if (!state.activeSheet || state.sheetNames.indexOf(state.activeSheet) === -1){
+        state.activeSheet = state.sheetNames[0];
+      }
+      $('fn-xlsx').textContent = name + (state.xlsxHandle ? ' (gravação direta ativada)' : '');
+      $('dz-xlsx').classList.add('filled');
+      var sel = $('sheet-select');
+      sel.innerHTML = '';
+      state.sheetNames.forEach(function(nm){
+        var opt = document.createElement('option');
+        opt.value = nm; opt.textContent = nm;
+        sel.appendChild(opt);
+      });
+      sel.value = state.activeSheet;
+      sel.style.display = state.sheetNames.length > 1 ? 'inline-block' : 'none';
+      sel.onchange = function(){ state.activeSheet = sel.value; scheduleSave(); };
+      checkReady();
+      scheduleSave();
+      setStatus('');
+    }).catch(function(err){
+      setStatus('Não foi possível ler a planilha: ' + esc(err.message), 'error');
+    });
+  }
+
+  // ---------------- Análise ----------------
+  $('btn-analyze').addEventListener('click', function(){
+    if (!window.pdfjsLib || !window.JSZip){
+      setStatus('As bibliotecas de leitura não carregaram. Verifique sua conexão com a internet e recarregue a página.', 'error');
+      return;
+    }
+    setStep(2);
+    $('btn-analyze').disabled = true;
+    $('panel-diff').style.display = 'none';
+    $('panel-summary').style.display = 'none';
+    setStatus('Lendo o PDF e comparando com a planilha...');
+
+    Promise.all([
+      readSheetCells(wb, state.activeSheet),
+      extractPdfLines(state.pdfData)
+    ]).then(function(results){
+      var cells = results[0].cells;
+      var pdfLines = results[1];
+      state.proposals = buildProposals(cells, pdfLines);
+      setStatus('');
+      renderDiff();
+      scheduleSave();
+    }).catch(function(err){
+      console.error(err);
+      setStatus('Erro na análise: ' + esc(err.message), 'error');
+    }).then(function(){
+      $('btn-analyze').disabled = false;
+    });
+  });
+
+  // ---------------- Revisão ----------------
+  function renderDiff(){
+    setStep(3);
+    var panel = $('panel-diff');
+    var area = $('diff-area');
+    panel.style.display = 'block';
+
+    if (!state.proposals.length){
+      area.innerHTML = '<div class="empty-hint">Nenhuma mudança encontrada — os valores da planilha já batem com o PDF, ou não foi possível casar os rótulos com confiança.</div>';
+      $('diff-actions').style.display = 'none';
+      return;
+    }
+
+    var html = '<table class="diff"><thead><tr><th>Célula</th><th>Rótulo</th><th>Valor atual</th><th>Valor novo</th><th>Trecho do PDF (pág.)</th><th></th></tr></thead><tbody>';
+    state.proposals.forEach(function(c){
+      html += '<tr id="row-' + c.id + '"' + (c.accepted ? '' : ' class="rejected"') + '>' +
+        '<td class="cell-ref">' + esc(c.cell) + (c.hasFormula ? ' &#9888;' : '') + '</td>' +
+        '<td>' + esc(c.label) + '</td>' +
+        '<td class="old-val">' + esc(c.oldValue === '' ? '(vazio)' : c.oldValue) + '</td>' +
+        '<td><input class="new-val-input" data-id="' + c.id + '" value="' + esc(c.newValue) + '"></td>' +
+        '<td class="source-txt">' + esc(c.source) + ' (p.' + c.page + ')</td>' +
+        '<td><span class="stamp' + (c.accepted ? '' : ' off') + '" data-id="' + c.id + '" id="stamp-' + c.id + '">' + (c.accepted ? 'USAR' : 'IGNORAR') + '</span></td>' +
+        '</tr>';
+    });
+    html += '</tbody></table>';
+    if (state.proposals.some(function(c){ return c.hasFormula; })){
+      html += '<div class="empty-hint small">&#9888; = a célula tem fórmula; se aceitar a mudança, a fórmula será substituída pelo valor do PDF.</div>';
+    }
+    area.innerHTML = html;
+
+    area.querySelectorAll('.new-val-input').forEach(function(inp){
+      inp.addEventListener('change', function(){
+        var c = state.proposals[parseInt(inp.getAttribute('data-id'), 10)];
+        if (c) c.newValue = inp.value;
+        scheduleSave();
+      });
+    });
+    area.querySelectorAll('.stamp').forEach(function(st){
+      st.addEventListener('click', function(){
+        var c = state.proposals[parseInt(st.getAttribute('data-id'), 10)];
+        c.accepted = !c.accepted;
+        st.textContent = c.accepted ? 'USAR' : 'IGNORAR';
+        st.classList.toggle('off', !c.accepted);
+        $('row-' + c.id).classList.toggle('rejected', !c.accepted);
+        updateCountPill();
+        scheduleSave();
+      });
+    });
+
+    $('diff-actions').style.display = 'flex';
+    updateCountPill();
+  }
+  function updateCountPill(){
+    var n = state.proposals.filter(function(c){ return c.accepted; }).length;
+    $('count-pill').textContent = n + ' de ' + state.proposals.length + ' selecionadas';
+  }
+  $('btn-check-all').addEventListener('click', function(){ markAll(true); });
+  $('btn-uncheck-all').addEventListener('click', function(){ markAll(false); });
+  function markAll(accept){
+    state.proposals.forEach(function(c){ c.accepted = accept; });
+    renderDiff();
+    scheduleSave();
+  }
+
+  // ---------------- Aplicação e gravação ----------------
+  $('btn-apply').addEventListener('click', function(){
+    var applied = state.proposals.filter(function(c){ return c.accepted; });
+    if (!applied.length){
+      setStatus('Nenhuma mudança selecionada.', 'error');
+      return;
+    }
+    setStep(4);
+    setStatus('Gravando mudanças na planilha...');
+    applyChangesToXlsx(wb, state.activeSheet, applied.map(function(c){
+      return { cell: c.cell, newValue: c.newValue };
+    })).then(function(outBuffer){
+      return saveWorkbookFile(outBuffer).then(function(savedHow){
+        state.xlsxData = outBuffer; // estado passa a refletir o arquivo gravado
+        return parseXlsx(outBuffer).then(function(newWb){ wb = newWb; return savedHow; });
+      });
+    }).then(function(savedHow){
+      var entry = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+        timestamp: new Date().toISOString(),
+        user: state.userName || 'Não informado',
+        xlsxName: state.xlsxName,
+        sheetName: state.activeSheet,
+        pdfName: state.pdfName,
+        changes: applied.map(function(c){
+          return { cell: c.cell, label: c.label, oldValue: c.oldValue, newValue: c.newValue, source: c.source, page: c.page };
+        })
+      };
+      return historyAdd(entry).then(function(){
+        state.proposals = [];
+        renderSummary(entry, savedHow);
+        $('panel-diff').style.display = 'none';
+        refreshHistory();
+        scheduleSave();
+        setStatus(savedHow === 'inplace'
+          ? 'Planilha atualizada e gravada no arquivo original com sucesso.'
+          : 'Planilha atualizada. Como o navegador não permite gravar direto, o arquivo atualizado foi baixado — substitua o original por ele.', 'ok');
+      });
+    }).catch(function(err){
+      console.error(err);
+      setStatus('Erro ao gravar: ' + esc(err.message), 'error');
+    });
+  });
+
+  function saveWorkbookFile(outBuffer){
+    if (state.xlsxHandle){
+      return state.xlsxHandle.queryPermission({ mode: 'readwrite' }).then(function(perm){
+        if (perm === 'granted') return 'granted';
+        return state.xlsxHandle.requestPermission({ mode: 'readwrite' });
+      }).then(function(perm){
+        if (perm !== 'granted') throw new Error('Permissão de gravação negada.');
+        return state.xlsxHandle.createWritable();
+      }).then(function(writable){
+        return writable.write(outBuffer).then(function(){ return writable.close(); });
+      }).then(function(){ return 'inplace'; })
+      .catch(function(err){
+        console.warn('Gravação direta falhou, baixando cópia:', err);
+        downloadBuffer(outBuffer, state.xlsxName);
+        return 'download';
+      });
+    }
+    downloadBuffer(outBuffer, state.xlsxName);
+    return Promise.resolve('download');
+  }
+  function downloadBuffer(buf, name){
+    var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  }
+
+  function changesTable(changes){
+    if (!changes || !changes.length) return '<div class="empty-hint small">Nenhuma célula alterada.</div>';
+    var html = '<table class="diff"><thead><tr><th>Célula</th><th>Rótulo</th><th>Antes</th><th>Depois</th><th>Trecho do PDF</th></tr></thead><tbody>';
+    changes.forEach(function(c){
+      html += '<tr>' +
+        '<td class="cell-ref">' + esc(c.cell) + '</td>' +
+        '<td>' + esc(c.label) + '</td>' +
+        '<td class="old-val">' + esc(c.oldValue === '' ? '(vazio)' : c.oldValue) + '</td>' +
+        '<td class="new-val">' + esc(c.newValue) + '</td>' +
+        '<td class="source-txt">' + esc(c.source || '') + (c.page ? ' (p.' + c.page + ')' : '') + '</td>' +
+        '</tr>';
+    });
+    return html + '</tbody></table>';
+  }
+
+  function renderSummary(entry, savedHow){
+    var panel = $('panel-summary');
+    var area = $('summary-area');
+    panel.style.display = 'block';
+    area.innerHTML =
+      '<div class="summary-box">' +
+        '<span class="stamp">' + entry.changes.length + ' CÉLULA(S) ATUALIZADA(S)</span>' +
+        '<span class="source-txt">' + esc(entry.xlsxName) + ' · aba "' + esc(entry.sheetName) + '" · por ' + esc(entry.user) + ' · ' + fmtDateTime(entry.timestamp) +
+        (savedHow === 'inplace' ? ' · gravado no arquivo original' : ' · baixado como cópia atualizada') + '</span>' +
+      '</div>' + changesTable(entry.changes);
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  // ---------------- Histórico (pastas por planilha) ----------------
+  var allHistory = [];
+  var openFolders = {};
+
+  function refreshHistory(){
+    historyAll().then(function(entries){
+      allHistory = entries.sort(function(a, b){ return b.timestamp.localeCompare(a.timestamp); });
+      // popula filtro de pastas
+      var folders = {};
+      allHistory.forEach(function(e){ folders[folderName(e)] = true; });
+      var sel = $('hist-filter-folder');
+      var cur = sel.value;
+      sel.innerHTML = '<option value="">Todas</option>';
+      Object.keys(folders).sort().forEach(function(f){
+        var opt = document.createElement('option');
+        opt.value = f; opt.textContent = f;
+        sel.appendChild(opt);
+      });
+      sel.value = cur && folders[cur] ? cur : '';
+      renderHistory();
+    });
+  }
+  function folderName(entry){
+    return String(entry.xlsxName || 'planilha').replace(/\.xlsx$/i, '');
+  }
+
+  function renderHistory(){
+    var textFilter = normalize($('hist-filter-text').value);
+    var folderFilter = $('hist-filter-folder').value;
+    var fromFilter = $('hist-filter-from').value;
+    var toFilter = $('hist-filter-to').value;
+    var area = $('history-area');
+
+    var entries = allHistory.slice();
+    if (folderFilter) entries = entries.filter(function(e){ return folderName(e) === folderFilter; });
+    if (fromFilter){
+      var fromTs = new Date(fromFilter + 'T00:00:00').getTime();
+      entries = entries.filter(function(e){ return new Date(e.timestamp).getTime() >= fromTs; });
+    }
+    if (toFilter){
+      var toTs = new Date(toFilter + 'T23:59:59').getTime();
+      entries = entries.filter(function(e){ return new Date(e.timestamp).getTime() <= toTs; });
+    }
+    if (textFilter){
+      entries = entries.filter(function(e){
+        var hay = normalize([e.xlsxName, e.pdfName, e.sheetName, e.user]
+          .concat((e.changes || []).map(function(c){ return c.cell + ' ' + c.label + ' ' + c.oldValue + ' ' + c.newValue; }))
+          .join(' '));
+        return hay.indexOf(textFilter) !== -1;
+      });
+    }
+
+    if (!entries.length){
+      area.innerHTML = '<div class="empty-hint small">' +
+        (allHistory.length ? 'Nenhum resultado para os filtros aplicados.' : 'Nenhuma atualização feita ainda. Quando você aplicar mudanças, elas aparecerão aqui, organizadas em pastas por planilha.') +
+        '</div>';
+      return;
+    }
+
+    // agrupa por pasta
+    var groups = {};
+    var order = [];
+    entries.forEach(function(e){
+      var f = folderName(e);
+      if (!groups[f]){ groups[f] = []; order.push(f); }
+      groups[f].push(e);
+    });
+
+    var html = '';
+    order.forEach(function(f){
+      var list = groups[f];
+      var isOpen = openFolders[f] || !!textFilter || !!folderFilter;
+      html += '<div class="folder' + (isOpen ? ' open' : '') + '" data-folder="' + esc(f) + '">' +
+        '<div class="folder-header">' +
+          '<span class="folder-title"><span class="ficon">&#128193;</span>' + esc(f) + '</span>' +
+          '<span class="folder-meta"><span class="badge-count">' + list.length + ' atualização(ões)</span><span class="chevron">&#9656;</span></span>' +
+        '</div>' +
+        '<div class="folder-body"><div class="history-list">';
+      list.forEach(function(e){
+        html += '<div class="history-entry" id="hist-' + e.id + '">' +
+          '<div class="history-entry-header" data-id="' + e.id + '">' +
+            '<div class="history-entry-main">' +
+              '<span class="history-entry-date">' + fmtDateTime(e.timestamp) + '</span>' +
+              '<span class="history-entry-files">aba "' + esc(e.sheetName) + '"' + (e.pdfName ? ' · fonte: ' + esc(e.pdfName) : '') + '</span>' +
+            '</div>' +
+            '<div class="history-entry-meta">' +
+              '<span class="badge-user">' + esc(e.user || 'Não informado') + '</span>' +
+              '<span class="badge-count">' + (e.changes ? e.changes.length : 0) + ' célula(s)</span>' +
+              '<span class="chevron">&#9656;</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="history-entry-body"><div class="table-scroll">' + changesTable(e.changes) + '</div></div>' +
+        '</div>';
+      });
+      html += '</div></div></div>';
+    });
+    area.innerHTML = html;
+
+    area.querySelectorAll('.folder-header').forEach(function(fh){
+      fh.addEventListener('click', function(){
+        var folder = fh.parentElement;
+        folder.classList.toggle('open');
+        openFolders[folder.getAttribute('data-folder')] = folder.classList.contains('open');
+      });
+    });
+    area.querySelectorAll('.history-entry-header').forEach(function(hh){
+      hh.addEventListener('click', function(){
+        $('hist-' + hh.getAttribute('data-id')).classList.toggle('open');
+      });
+    });
+  }
+
+  ['hist-filter-text', 'hist-filter-folder', 'hist-filter-from', 'hist-filter-to'].forEach(function(id){
+    $(id).addEventListener('input', renderHistory);
+    $(id).addEventListener('change', renderHistory);
+  });
+  $('btn-clear-filters').addEventListener('click', function(){
+    $('hist-filter-text').value = '';
+    $('hist-filter-folder').value = '';
+    $('hist-filter-from').value = '';
+    $('hist-filter-to').value = '';
+    renderHistory();
+  });
+  $('btn-clear-history').addEventListener('click', function(){
+    if (!confirm('Apagar todo o histórico de atualizações? Essa ação não pode ser desfeita.')) return;
+    historyClear().then(function(){ openFolders = {}; refreshHistory(); });
+  });
+
+  // ---------------- Sessão ----------------
+  $('btn-clear-session').addEventListener('click', function(){
+    if (!confirm('Isso limpa o PDF, a planilha e as mudanças pendentes desta tela. O histórico não é afetado. Continuar?')) return;
+    Promise.all([kvDel('session'), kvDel('xlsxHandle')]).then(function(){ location.reload(); });
+  });
+
+  $('user-name').addEventListener('input', function(){
+    state.userName = $('user-name').value.trim();
+    try { localStorage.setItem('atualizador_userName', state.userName); } catch(e){}
+  });
+
+  function restoreSession(){
+    try { state.userName = localStorage.getItem('atualizador_userName') || ''; } catch(e){}
+    $('user-name').value = state.userName;
+
+    Promise.all([kvGet('session'), kvGet('xlsxHandle')]).then(function(results){
+      var data = results[0];
+      if (results[1]) state.xlsxHandle = results[1];
+      if (!data) return;
+      state.pdfData = data.pdfData || null;
+      state.pdfName = data.pdfName || null;
+      state.activeSheet = data.activeSheet || null;
+      state.proposals = Array.isArray(data.proposals) ? data.proposals : [];
+
+      if (state.pdfName){
+        $('fn-pdf').textContent = state.pdfName;
+        $('dz-pdf').classList.add('filled');
+      }
+      if (data.xlsxData){
+        loadXlsx(data.xlsxData, data.xlsxName || 'planilha.xlsx');
+      }
+      checkReady();
+      if (state.proposals.length){
+        renderDiff();
+        showBanner('Sessão anterior restaurada, incluindo ' + state.proposals.length + ' mudança(s) pendente(s) de revisão.');
+      } else if (state.pdfData || data.xlsxData){
+        showBanner('Sessão anterior restaurada automaticamente' +
+          (state.pdfName ? ' · PDF: ' + esc(state.pdfName) : '') +
+          (data.xlsxName ? ' · planilha: ' + esc(data.xlsxName) : '') + '.');
+      }
+    }).catch(function(e){
+      console.warn('Falha ao restaurar sessão:', e);
+    });
+  }
+
+  // Expõe funções internas para testes no console (não afeta o uso normal)
+  window.AppDebug = {
+    parseXlsx: parseXlsx,
+    readSheetCells: readSheetCells,
+    applyChangesToXlsx: applyChangesToXlsx,
+    buildProposals: buildProposals,
+    parseNumberBR: parseNumberBR,
+    extractPdfLines: extractPdfLines,
+    state: state,
+    getWb: function(){ return wb; }
+  };
+
+  // ---------------- Inicialização ----------------
+  setStep(1);
+  restoreSession();
+  refreshHistory();
+})();
+</script>
+</body>
+</html>
